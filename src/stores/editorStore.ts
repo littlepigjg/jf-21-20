@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import type { Frame, Caption, CropConfig, ExportConfig } from '@/types';
+import type {
+  Frame,
+  Caption,
+  CropConfig,
+  ExportConfig,
+  LoopAnalysisResult,
+  LoopOptimizeConfig,
+} from '@/types';
 import { generateId, cloneImageData, createBlankImageData } from '@/utils/imageUtils';
+import { analyzeLoop, optimizeLoop, type OptimizeOptions } from '@/utils/loopAnalyzer';
 
 interface EditorStore {
   frames: Frame[];
@@ -15,6 +23,9 @@ interface EditorStore {
   canvasHeight: number;
   showImportDialog: boolean;
   showExportDialog: boolean;
+  loopAnalysis: LoopAnalysisResult | null;
+  loopOptimizeConfig: LoopOptimizeConfig;
+  isAnalyzingLoop: boolean;
 
   setFrames: (frames: Frame[]) => void;
   setSelectedFrameIndex: (index: number) => void;
@@ -38,6 +49,10 @@ interface EditorStore {
   setCrop: (crop: Partial<CropConfig>) => void;
   setExportConfig: (config: Partial<ExportConfig>) => void;
 
+  analyzeLoopFrames: () => void;
+  setLoopOptimizeConfig: (config: Partial<LoopOptimizeConfig>) => void;
+  applyLoopOptimization: (blendFrameCount?: number) => void;
+
   clearAll: () => void;
 }
 
@@ -59,6 +74,14 @@ const defaultExportConfig: ExportConfig = {
   height: 0,
 };
 
+const defaultLoopOptimizeConfig: LoopOptimizeConfig = {
+  enabled: false,
+  autoAdjustDelays: true,
+  addBlendFrames: true,
+  crossfadeStrength: 0.5,
+  targetSmoothness: 90,
+};
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   frames: [],
   selectedFrameIndex: -1,
@@ -72,6 +95,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   canvasHeight: 480,
   showImportDialog: false,
   showExportDialog: false,
+  loopAnalysis: null,
+  loopOptimizeConfig: defaultLoopOptimizeConfig,
+  isAnalyzingLoop: false,
 
   setFrames: (frames) => {
     if (frames.length > 0) {
@@ -219,6 +245,41 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setCrop: (crop) => set({ crop: { ...get().crop, ...crop } }),
   setExportConfig: (config) => set({ exportConfig: { ...get().exportConfig, ...config } }),
 
+  analyzeLoopFrames: () => {
+    const state = get();
+    if (state.frames.length < 2) {
+      set({ loopAnalysis: null });
+      return;
+    }
+    set({ isAnalyzingLoop: true });
+    try {
+      const result = analyzeLoop(state.frames);
+      set({ loopAnalysis: result });
+    } finally {
+      set({ isAnalyzingLoop: false });
+    }
+  },
+
+  setLoopOptimizeConfig: (config) =>
+    set({ loopOptimizeConfig: { ...get().loopOptimizeConfig, ...config } }),
+
+  applyLoopOptimization: (blendFrameCount = 3) => {
+    const state = get();
+    if (state.frames.length < 2) return;
+
+    const cfg = state.loopOptimizeConfig;
+    const options: OptimizeOptions = {
+      addBlendFrames: cfg.addBlendFrames,
+      blendFrameCount: cfg.addBlendFrames ? blendFrameCount : 0,
+      autoAdjustDelays: cfg.autoAdjustDelays,
+      crossfadeStrength: cfg.crossfadeStrength,
+    };
+
+    const optimized = optimizeLoop(state.frames, options);
+    get().setFrames(optimized);
+    get().analyzeLoopFrames();
+  },
+
   clearAll: () =>
     set({
       frames: [],
@@ -229,5 +290,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       currentFrameIndex: 0,
       showImportDialog: false,
       showExportDialog: false,
+      loopAnalysis: null,
+      loopOptimizeConfig: defaultLoopOptimizeConfig,
+      isAnalyzingLoop: false,
     }),
 }));

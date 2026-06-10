@@ -8,10 +8,12 @@ import {
   Plus,
   Trash2,
   Clock,
+  RefreshCw,
 } from 'lucide-react';
 import { useEditorStore } from '@/stores/editorStore';
 import type { Caption } from '@/types';
 import { cn } from '@/lib/utils';
+import LoopOptimizerPanel from '@/components/LoopOptimizerPanel';
 
 interface PanelSectionProps {
   title: string;
@@ -434,6 +436,14 @@ export default function PropertyPanel() {
             </div>
           </div>
         </div>
+      </PanelSection>
+
+      <PanelSection
+        title="循环优化"
+        icon={<RefreshCw className="w-4 h-4 text-pink-400" />}
+        defaultOpen={true}
+      >
+        <LoopOptimizerPanel />
       </PanelSection>
     </div>
   );
